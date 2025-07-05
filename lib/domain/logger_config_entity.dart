@@ -1,5 +1,4 @@
-
-import 'log_level.dart';
+import '../app_logger.dart';
 
 class LoggerConfigEntity {
   final bool enableInDebug;
@@ -10,10 +9,15 @@ class LoggerConfigEntity {
     this.enableInDebug = true,
     this.enableInRelease = true,
     Map<LogLevel, String>? logColors,
-  }) : logColors = logColors ?? {
-    LogLevel.info: '\x1B[32m',
-    LogLevel.warning: '\x1B[33m',
-    LogLevel.error: '\x1B[31m',
-    LogLevel.critical: '\x1B[35m',
-  };
+  }) : logColors =
+           logColors ??
+           {
+             LogLevel.apiError: '\x1B[31m',
+             LogLevel.apiResponse: '\x1B[32m',
+             LogLevel.apiHeaders: '\x1B[33m',
+             LogLevel.apiBody: '\x1B[34m',
+             LogLevel.apiUrl: '\x1B[35m',
+             LogLevel.stackTrace: '\x1B[36m',
+             LogLevel.unkown: '\x1B[37m',
+           };
 }

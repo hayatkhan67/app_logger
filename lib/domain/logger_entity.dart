@@ -1,33 +1,30 @@
-import 'log_level.dart';
+import '../app_logger.dart';
 
 class LoggerEntity {
   final String message;
   final LogLevel level;
-  final DateTime timestamp;
+  final DateTime time;
   final String device;
   final String platform;
-  final String appVersion;
-  final Map<String, dynamic> extra;
+  final String version;
 
   LoggerEntity({
     required this.message,
     required this.level,
-    required this.timestamp,
+    required this.time,
     required this.device,
     required this.platform,
-    required this.appVersion,
-    this.extra = const {},
+    required this.version,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      "log": message,
+      "message": message,
       "level": level.name,
-      "timestamp": timestamp.toUtc().toIso8601String(),
+      "time": time.toUtc().toIso8601String(),
       "device": device,
       "platform": platform,
-      "appVersion": appVersion,
-      "extra": extra,
+      "version": version,
     };
   }
 }

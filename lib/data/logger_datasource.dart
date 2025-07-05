@@ -5,7 +5,7 @@ import '../domain/logger_repository.dart';
 class LoggerDatasource implements LoggerRepository {
   final FirebaseFirestore _firestore;
 
-  LoggerDatasource(this._firestore);
+  const LoggerDatasource(this._firestore);
 
   @override
   Future<void> saveLog(LoggerEntity log) async {
