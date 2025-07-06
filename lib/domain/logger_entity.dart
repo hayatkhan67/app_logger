@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../app_logger.dart';
 
 class LoggerEntity {
@@ -7,6 +9,7 @@ class LoggerEntity {
   final String device;
   final String platform;
   final String version;
+  final String? name; // Optional name for the logger
 
   LoggerEntity({
     required this.message,
@@ -15,13 +18,15 @@ class LoggerEntity {
     required this.device,
     required this.platform,
     required this.version,
+    this.name,
   });
 
   Map<String, dynamic> toMap() {
     return {
+      "name": name,
       "message": message,
       "level": level.name,
-      "time": time.toUtc().toIso8601String(),
+      'time': FieldValue.serverTimestamp(),
       "device": device,
       "platform": platform,
       "version": version,

@@ -30,11 +30,13 @@ class AppLogger {
 
   static Future<void> log(
     dynamic message, {
-    LogLevel level = LogLevel.unkown,
+    ///preffer to set name to identify the log source
+    String? name,
+    LogLevel level = LogLevel.commonLogs,
   }) async {
     final formattedMessage = _formatMessage(message);
 
-    LogPrinter.printLog(formattedMessage, level, _config);
+    LogPrinter.printLog(name, formattedMessage, level, _config);
 
     if (!_initialized) return;
 
@@ -52,7 +54,7 @@ class AppLogger {
           .get()
           .timeout(const Duration(seconds: 5));
 
-      final data = res.data() as Map<String, dynamic>?;
+      final data = res.data();
 
       if (data == null) return;
 
@@ -66,6 +68,7 @@ class AppLogger {
         final logEntity = LoggerEntity(
           message: formattedMessage,
           level: level,
+          name: name ?? 'AppLogger',
           time: DateTime.now(),
           device: device,
           platform: platform,
@@ -76,14 +79,16 @@ class AppLogger {
       }
     } on TimeoutException {
       LogPrinter.printLog(
+        name,
         "⚠️ Log settings fetch timed out",
-        LogLevel.unkown,
+        LogLevel.commonLogs,
         _config,
       );
     } catch (e) {
       LogPrinter.printLog(
+        name,
         "⚠️ Error fetching log settings: $e",
-        LogLevel.unkown,
+        LogLevel.commonLogs,
         _config,
       );
     }
@@ -99,11 +104,11 @@ class AppLogger {
         return data['apiHeaders'] == true;
       case LogLevel.apiBody:
         return data['apiPayload'] == true;
-      case LogLevel.apiUrl:
+      case LogLevel.endPoint:
         return data['apiEndpoint'] == true;
       case LogLevel.stackTrace:
         return data['stackTrace'] == true;
-      case LogLevel.unkown:
+      case LogLevel.commonLogs:
       default:
         return data['commonLogs'] == true;
     }

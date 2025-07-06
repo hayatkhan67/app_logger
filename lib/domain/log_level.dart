@@ -3,8 +3,8 @@ enum LogLevel {
   apiResponse, // API response body
   apiHeaders, // API response/request headers
   apiBody, // API request payload
-  apiUrl, // API endpoint or URL
+  endPoint, // API endpoint or URL
 
   stackTrace, // Full stack trace log
-  unkown, // Undefined or fallback
+  commonLogs, // Undefined or fallback
 }
