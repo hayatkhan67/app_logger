@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../app_logger.dart';
+import '../../app_logger.dart';
 
 class LoggerEntity {
   final String message;

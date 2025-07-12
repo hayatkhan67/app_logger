@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-import '../domain/log_level.dart';
-import '../domain/logger_config_entity.dart';
+import '../domain/value_objects/log_level.dart';
+import '../shared/logger_config_entity.dart';
 
 class LogPrinter {
   static void printLog(

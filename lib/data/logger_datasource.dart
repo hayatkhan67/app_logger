@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../domain/logger_entity.dart';
-import '../domain/logger_repository.dart';
+import '../domain/entities/logger_entity.dart';
+import '../domain/repositories/logger_repository.dart';
 
 class LoggerDatasource implements LoggerRepository {
   final FirebaseFirestore _firestore;

@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:app_logger/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import 'data/logger_datasource.dart';
-import 'domain/logger_repository.dart';
+import 'domain/repositories/logger_repository.dart';
 
 class AppLogger {
   static bool _initialized = false;
@@ -15,6 +16,8 @@ class AppLogger {
 
   static final _settingCollection =
       FirebaseFirestore.instance.collection('app_logs_setting');
+
+  static Map<String, dynamic>? _settings;
 
   static Future<void> initialize({
     required FirebaseOptions firebaseOptions,
@@ -25,20 +28,40 @@ class AppLogger {
     _config = config ?? LoggerConfigEntity();
     await Firebase.initializeApp(options: firebaseOptions);
     _repository = LoggerDatasource(FirebaseFirestore.instance);
+
+    // 🔁 Realtime settings listener
+    _settingCollection.doc('settings').snapshots().listen(
+      (snapshot) {
+        _settings = snapshot.data();
+        LogPrinter.printLog(
+          'AppLogger',
+          "✅ Logger settings updated",
+          LogLevel.commonLogs,
+          _config,
+        );
+      },
+      onError: (error) {
+        LogPrinter.printLog(
+          'AppLogger',
+          "⚠️ Logger settings listener error: $error",
+          LogLevel.commonLogs,
+          _config,
+        );
+      },
+    );
+
     _initialized = true;
   }
 
   static Future<void> log(
     dynamic message, {
-    ///preffer to set name to identify the log source
     String? name,
     LogLevel level = LogLevel.commonLogs,
   }) async {
     final formattedMessage = _formatMessage(message);
-
     LogPrinter.printLog(name, formattedMessage, level, _config);
 
-    if (!_initialized) return;
+    if (!_initialized || _settings == null) return;
 
     final isDebug = kDebugMode;
     final isRelease = kReleaseMode;
@@ -48,49 +71,28 @@ class AppLogger {
       return;
     }
 
-    try {
-      final res = await _settingCollection
-          .doc('settings')
-          .get()
-          .timeout(const Duration(seconds: 5));
+    final data = _settings!;
+    if (data['logOn'] != true) return;
 
-      final data = res.data();
+    final shouldLogAll = data['allLogs'] == true;
+    final shouldLogSpecific = _isAllowed(level, data);
 
-      if (data == null) return;
+    if (shouldLogAll || shouldLogSpecific) {
+      final device = await DeviceInfoHelper.getDeviceModel();
+      final platform = await DeviceInfoHelper.getPlatform();
+      final appVersion = await DeviceInfoHelper.getAppVersion();
 
-      final logAll = data['allLogs'] == true;
-
-      if (logAll || _isAllowed(level, data)) {
-        final device = await DeviceInfoHelper.getDeviceModel();
-        final platform = await DeviceInfoHelper.getPlatform();
-        final appVersion = await DeviceInfoHelper.getAppVersion();
-
-        final logEntity = LoggerEntity(
-          message: formattedMessage,
-          level: level,
-          name: name ?? 'AppLogger',
-          time: DateTime.now(),
-          device: device,
-          platform: platform,
-          version: appVersion,
-        );
-
-        await _repository.saveLog(logEntity);
-      }
-    } on TimeoutException {
-      LogPrinter.printLog(
-        name,
-        "⚠️ Log settings fetch timed out",
-        LogLevel.commonLogs,
-        _config,
+      final logEntity = LoggerEntity(
+        message: formattedMessage,
+        level: level,
+        name: name ?? 'AppLogger',
+        time: DateTime.now(),
+        device: device,
+        platform: platform,
+        version: appVersion,
       );
-    } catch (e) {
-      LogPrinter.printLog(
-        name,
-        "⚠️ Error fetching log settings: $e",
-        LogLevel.commonLogs,
-        _config,
-      );
+
+      await _repository.saveLog(logEntity);
     }
   }
 
@@ -114,15 +116,59 @@ class AppLogger {
     }
   }
 
-  /// Converts message to proper JSON-safe String
   static String _formatMessage(dynamic message) {
     try {
-      if (message is String) {
-        return message; // Direct string return, extra quotes avoid
+      if (message is Map) {
+        return jsonEncode(message);
       }
+
+      if (message is String) {
+        try {
+          final parsed = jsonDecode(message);
+          return jsonEncode(parsed); // valid JSON string
+        } catch (_) {
+          final fixed = _fixPseudoJson(message);
+          final parsed = jsonDecode(fixed);
+          return jsonEncode(parsed);
+        }
+      }
+
       return jsonEncode(message);
     } catch (_) {
       return message.toString();
     }
+  }
+
+  static String _fixPseudoJson(String input) {
+    final now = DateTime.now().toIso8601String();
+
+    input = input.replaceAllMapped(
+      RegExp(r'DateTime\.now\(\)\.toIso8601String\(\)'),
+      (_) => '"$now"',
+    );
+
+    input = input.replaceAllMapped(
+      RegExp(r'(\w+)\s*:\s*([^,{}]+)'),
+      (match) {
+        final key = match.group(1)?.trim();
+        var value = match.group(2)?.trim();
+
+        final isQuoted = value!.startsWith('"') ||
+            value.startsWith("'") ||
+            num.tryParse(value) != null;
+        if (!isQuoted &&
+            value != 'true' &&
+            value != 'false' &&
+            value != 'null') {
+          value = '"$value"';
+        }
+
+        return '"$key": $value';
+      },
+    );
+
+    input = input.replaceAll(RegExp(r',\s*}'), '}');
+
+    return input;
   }
 }
