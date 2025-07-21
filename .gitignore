@@ -31,3 +31,4 @@ migrate_working_dir/
 build/
 test1/
 launch.json
+example/

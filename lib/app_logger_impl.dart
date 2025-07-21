@@ -24,6 +24,40 @@ class AppLogger {
 
   static Map<String, dynamic>? _settings;
 
+  // static Future<void> initialize({
+  //   required FirebaseOptions firebaseOptions,
+  //   LoggerConfigEntity? config,
+  // }) async {
+  //   if (_initialized) return;
+
+  //   _config = config ?? LoggerConfigEntity();
+  //   await Firebase.initializeApp(options: firebaseOptions);
+  //   _repository = LoggerDatasource(FirebaseFirestore.instance);
+
+  //   // 🔁 Realtime settings listener
+  //   _settingCollection.doc('settings').snapshots().listen(
+  //     (snapshot) {
+  //       _settings = snapshot.data();
+  //       LogPrinter.printLog(
+  //         'AppLogger',
+  //         "✅ Logger settings updated",
+  //         LogLevel.commonLogs,
+  //         _config,
+  //       );
+  //     },
+  //     onError: (error) {
+  //       LogPrinter.printLog(
+  //         'AppLogger',
+  //         "⚠️ Logger settings listener error: $error",
+  //         LogLevel.commonLogs,
+  //         _config,
+  //       );
+  //     },
+  //   );
+
+  //   _initialized = true;
+  // }
+
   static Future<void> initialize({
     required FirebaseOptions firebaseOptions,
     LoggerConfigEntity? config,
@@ -34,8 +68,33 @@ class AppLogger {
     await Firebase.initializeApp(options: firebaseOptions);
     _repository = LoggerDatasource(FirebaseFirestore.instance);
 
+    final docRef = _settingCollection.doc('settings');
+
+    // ✅ Check if 'settings' document exists
+    final doc = await docRef.get();
+    if (!doc.exists) {
+      await docRef.set({
+        'logOn': true,
+        'allLogs': false,
+        'commonLogs': true,
+        'apiError': true,
+        'apiResponse': false,
+        'apiHeaders': false,
+        'apiPayload': false,
+        'apiEndpoint': false,
+        'stackTrace': true,
+      });
+
+      LogPrinter.printLog(
+        'AppLogger',
+        "🆕 Logger settings document created in Firestore",
+        LogLevel.commonLogs,
+        _config,
+      );
+    }
+
     // 🔁 Realtime settings listener
-    _settingCollection.doc('settings').snapshots().listen(
+    docRef.snapshots().listen(
       (snapshot) {
         _settings = snapshot.data();
         LogPrinter.printLog(
