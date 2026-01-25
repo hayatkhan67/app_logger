@@ -24,6 +24,17 @@ class AppLogger {
 
   static Map<String, dynamic>? _settings;
 
+  // Cached device info (avoid repeated async calls)
+  static String _cachedDevice = '';
+  static String _cachedPlatform = '';
+  static String _cachedAppVersion = '';
+
+  // Log batching
+  static final List<LoggerEntity> _buffer = [];
+  static Timer? _flushTimer;
+  static const _batchSize = 10;
+  static const _flushInterval = Duration(seconds: 5);
+
   static Future<void> initialize({
     required FirebaseOptions firebaseOptions,
     LoggerConfigEntity? config,
@@ -34,15 +45,20 @@ class AppLogger {
     await Firebase.initializeApp(options: firebaseOptions);
     _repository = LoggerDatasource(FirebaseFirestore.instance);
 
+    // Cache device info once
+    _cachedDevice = await DeviceInfoHelper.getDeviceModel();
+    _cachedPlatform = await DeviceInfoHelper.getPlatform();
+    _cachedAppVersion = await DeviceInfoHelper.getAppVersion();
+
     final docRef = _settingCollection.doc('settings');
 
-    // ✅ Check if 'settings' document exists
+    // Check if 'settings' document exists
     final doc = await docRef.get();
     if (!doc.exists) {
       await docRef.set({
         'logOn': true,
         'allLogs': false,
-        'commonLogs': true,
+        'commonLogs': false,
         'apiError': true,
         'apiResponse': false,
         'apiHeaders': false,
@@ -59,7 +75,7 @@ class AppLogger {
       );
     }
 
-    // 🔁 Realtime settings listener
+    // Realtime settings listener
     docRef.snapshots().listen(
       (snapshot) {
         _settings = snapshot.data();
@@ -83,55 +99,17 @@ class AppLogger {
     _initialized = true;
   }
 
-//   static Future<void> log(
-//     dynamic message, {
-//     String? name,
-//     LogLevel level = LogLevel.commonLogs,
-//   }) async {
-//     final formattedMessage = await formatMessage(message);
-//     LogPrinter.printLog(name, formattedMessage, level, _config);
-
-//     if (!_initialized || _settings == null) return;
-
-//     final isDebug = kDebugMode;
-//     final isRelease = kReleaseMode;
-
-//     if ((isDebug && !_config.enableInDebug) ||
-//         (isRelease && !_config.enableInRelease)) {
-//       return;
-//     }
-
-//     final data = _settings!;
-//     if (data['logOn'] != true) return;
-
-//     final shouldLogAll = data['allLogs'] == true;
-//     final shouldLogSpecific = isAllowed(level, data);
-
-//     if (shouldLogAll || shouldLogSpecific) {
-//       final device = await DeviceInfoHelper.getDeviceModel();
-//       final platform = await DeviceInfoHelper.getPlatform();
-//       final appVersion = await DeviceInfoHelper.getAppVersion();
-
-//       final logEntity = LoggerEntity(
-//         message: formattedMessage,
-//         level: level,
-//         name: name ?? 'AppLogger',
-//         time: DateTime.now(),
-//         device: device,
-//         platform: platform,
-//         version: appVersion,
-//       );
-
-//       await _repository.saveLog(logEntity);
-//     }
-//   }
-// }
   static Future<void> log(
     dynamic message, {
     String? name,
     LogLevel level = LogLevel.commonLogs,
   }) async {
-    // 🚨 Fail fast if not initialized
+    // Skip null/empty messages
+    if (message == null) return;
+    final msgStr = message.toString().trim();
+    if (msgStr.isEmpty) return;
+
+    // Fail fast if not initialized
     assert(_initialized,
         'AppLogger has not been initialized. Call AppLogger.initialize() first.');
     if (!_initialized) {
@@ -160,22 +138,46 @@ class AppLogger {
     final shouldLogSpecific = isAllowed(level, data);
 
     if (shouldLogAll || shouldLogSpecific) {
-      final device = await DeviceInfoHelper.getDeviceModel();
-      final platform = await DeviceInfoHelper.getPlatform();
-      final appVersion = await DeviceInfoHelper.getAppVersion();
-
       final String logName = (name?.isNotEmpty ?? false) ? name! : '';
       final logEntity = LoggerEntity(
         message: formattedMessage,
         level: level,
         name: logName,
         time: DateTime.now(),
-        device: device,
-        platform: platform,
-        version: appVersion,
+        device: _cachedDevice,
+        platform: _cachedPlatform,
+        version: _cachedAppVersion,
       );
 
-      await _repository.saveLog(logEntity);
+      await _addToBuffer(logEntity);
     }
+  }
+
+  /// Add log to buffer and flush when ready
+  static Future<void> _addToBuffer(LoggerEntity log) async {
+    _buffer.add(log);
+
+    if (_buffer.length >= _batchSize) {
+      await _flush();
+    } else {
+      _flushTimer?.cancel();
+      _flushTimer = Timer(_flushInterval, _flush);
+    }
+  }
+
+  /// Flush buffered logs to Firestore
+  static Future<void> _flush() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    if (_buffer.isEmpty) return;
+
+    final logsToFlush = List<LoggerEntity>.from(_buffer);
+    _buffer.clear();
+    await _repository.saveLogs(logsToFlush);
+  }
+
+  /// Force flush remaining logs (call on app dispose)
+  static Future<void> dispose() async {
+    await _flush();
   }
 }

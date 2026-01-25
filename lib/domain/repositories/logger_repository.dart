@@ -2,4 +2,5 @@ import '../entities/logger_entity.dart';
 
 abstract class LoggerRepository {
   Future<void> saveLog(LoggerEntity log);
+  Future<void> saveLogs(List<LoggerEntity> logs);
 }
