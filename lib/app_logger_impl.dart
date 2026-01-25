@@ -24,40 +24,6 @@ class AppLogger {
 
   static Map<String, dynamic>? _settings;
 
-  // static Future<void> initialize({
-  //   required FirebaseOptions firebaseOptions,
-  //   LoggerConfigEntity? config,
-  // }) async {
-  //   if (_initialized) return;
-
-  //   _config = config ?? LoggerConfigEntity();
-  //   await Firebase.initializeApp(options: firebaseOptions);
-  //   _repository = LoggerDatasource(FirebaseFirestore.instance);
-
-  //   // 🔁 Realtime settings listener
-  //   _settingCollection.doc('settings').snapshots().listen(
-  //     (snapshot) {
-  //       _settings = snapshot.data();
-  //       LogPrinter.printLog(
-  //         'AppLogger',
-  //         "✅ Logger settings updated",
-  //         LogLevel.commonLogs,
-  //         _config,
-  //       );
-  //     },
-  //     onError: (error) {
-  //       LogPrinter.printLog(
-  //         'AppLogger',
-  //         "⚠️ Logger settings listener error: $error",
-  //         LogLevel.commonLogs,
-  //         _config,
-  //       );
-  //     },
-  //   );
-
-  //   _initialized = true;
-  // }
-
   static Future<void> initialize({
     required FirebaseOptions firebaseOptions,
     LoggerConfigEntity? config,
@@ -117,15 +83,67 @@ class AppLogger {
     _initialized = true;
   }
 
+//   static Future<void> log(
+//     dynamic message, {
+//     String? name,
+//     LogLevel level = LogLevel.commonLogs,
+//   }) async {
+//     final formattedMessage = await formatMessage(message);
+//     LogPrinter.printLog(name, formattedMessage, level, _config);
+
+//     if (!_initialized || _settings == null) return;
+
+//     final isDebug = kDebugMode;
+//     final isRelease = kReleaseMode;
+
+//     if ((isDebug && !_config.enableInDebug) ||
+//         (isRelease && !_config.enableInRelease)) {
+//       return;
+//     }
+
+//     final data = _settings!;
+//     if (data['logOn'] != true) return;
+
+//     final shouldLogAll = data['allLogs'] == true;
+//     final shouldLogSpecific = isAllowed(level, data);
+
+//     if (shouldLogAll || shouldLogSpecific) {
+//       final device = await DeviceInfoHelper.getDeviceModel();
+//       final platform = await DeviceInfoHelper.getPlatform();
+//       final appVersion = await DeviceInfoHelper.getAppVersion();
+
+//       final logEntity = LoggerEntity(
+//         message: formattedMessage,
+//         level: level,
+//         name: name ?? 'AppLogger',
+//         time: DateTime.now(),
+//         device: device,
+//         platform: platform,
+//         version: appVersion,
+//       );
+
+//       await _repository.saveLog(logEntity);
+//     }
+//   }
+// }
   static Future<void> log(
     dynamic message, {
     String? name,
     LogLevel level = LogLevel.commonLogs,
   }) async {
+    // 🚨 Fail fast if not initialized
+    assert(_initialized,
+        'AppLogger has not been initialized. Call AppLogger.initialize() first.');
+    if (!_initialized) {
+      throw StateError(
+        'AppLogger has not been initialized. Call AppLogger.initialize() before logging.',
+      );
+    }
+
     final formattedMessage = await formatMessage(message);
     LogPrinter.printLog(name, formattedMessage, level, _config);
 
-    if (!_initialized || _settings == null) return;
+    if (_settings == null) return;
 
     final isDebug = kDebugMode;
     final isRelease = kReleaseMode;
@@ -146,10 +164,11 @@ class AppLogger {
       final platform = await DeviceInfoHelper.getPlatform();
       final appVersion = await DeviceInfoHelper.getAppVersion();
 
+      final String logName = (name?.isNotEmpty ?? false) ? name! : '';
       final logEntity = LoggerEntity(
         message: formattedMessage,
         level: level,
-        name: name ?? 'AppLogger',
+        name: logName,
         time: DateTime.now(),
         device: device,
         platform: platform,
